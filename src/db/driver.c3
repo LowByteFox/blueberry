@@ -29,10 +29,34 @@ fn void Driver.finalize(&self)
 
 fn SqliteInt64 Driver.insert_id(&self) => sqlite3::last_insert_id(self.db);
 
-fn ResultStatus Driver.prepare(&self, ZString statement)
+macro ResultStatus Driver.prepare(&self, ZString statement, ...)
 {
     self.used = true;
-    return sqlite3::prepare_v2(self.db, statement, -1, &self.stmt, null);
+    ResultStatus res = sqlite3::prepare_v2(self.db, statement, -1, &self.stmt,
+        null);
+
+    $for var $i = 0; $i < $vacount; $i++:
+        $switch $typeof($vaarg[$i]):
+        $case ichar:
+        $case short:
+        $case int:
+            sqlite3::bind_int(self.stmt, $i + 1, $vaarg[$i]);
+        $case long:
+            sqlite3::bind_int64(self.stmt, $i + 1, $vaarg[$i]);
+        $case float:
+        $case double:
+            sqlite3::bind_double(self.stmt, $i + 1, $vaarg[$i]);
+        $case String:
+            sqlite3::bind_text(self.stmt, $i + 1, (ZString) $vaarg[$i].ptr,
+                    $vaarg[$i].len, null);
+        $case ZString:
+            sqlite3::bind_text(self.stmt, $i + 1, $vaarg[$i], -1, null);
+        $default:
+            $error "Unhandled type: " +++ $typeof($vaarg[$i]).nameof;
+        $endswitch
+    $endfor
+
+    return res;
 }
 
 macro ResultStatus new_table(Driver *drv, $Type, ZString $name) =>
